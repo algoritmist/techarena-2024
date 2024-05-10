@@ -1,9 +1,12 @@
+#include <cassert>
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <map>
 #include <stddef.h>
 #include <stdlib.h>
 #include <vector>
+
 
 #define BEAM_MAX 33
 
@@ -34,14 +37,28 @@ std::vector<Interval> getFReeRbs(int M,
 
 template <class T, class Compare>
 std::vector<T> kmax(int k, std::vector<T> arr, Compare cmp) {
-  std::vector<T> sorted;
-  for (auto &element : arr) {
-    if (sorted.size() == k) {
-      sorted.erase(std::min_element(sorted.begin(), sorted.end(), cmp));
+  if (k < 10){
+    std::vector<T> sorted;
+    for (auto &element : arr) {
+      if (sorted.size() < k) {
+        sorted.push_back(element);
+      } else {
+        auto it = std::min_element(sorted.begin(), sorted.end(), cmp);
+        if (cmp(*it, element)) {
+          sorted.erase(it);
+          sorted.push_back(element);
+        }
+      }
     }
-    sorted.push_back(element);
+    return sorted;
   }
-  return sorted;
+  else{
+    std::sort(arr.rbegin(), arr.rend(), cmp);
+    while(arr.size() > k){
+      arr.pop_back();
+    }
+    return arr;
+  }
 }
 
 std::vector<std::vector<UserInfo>>
@@ -54,11 +71,17 @@ filterUsers(int J, const std::vector<UserInfo> &userInfos) {
   for (size_t i = 0; i < infos.size(); ++i) {
     infos[i] = kmax(J, infos[i],
                     [](UserInfo a, UserInfo b) { return a.rbNeed < b.rbNeed; });
+    /*std::cout << "beam " << i << ": ";
+    for(auto info:infos[i]){
+      std::cout << info.id << " ";
+    }
+    std::cout << std::endl;*/
   }
   return infos;
 }
 
-std::pair<int, UserInfo &> closest(int x, std::vector<UserInfo> &users) {
+std::pair<int, std::pair<int, int>>
+closest(int x, const std::vector<UserInfo> &users) {
   int min = 1 << 30;
   int index = 0;
   for (int i = 0; i < users.size(); ++i) {
@@ -67,7 +90,7 @@ std::pair<int, UserInfo &> closest(int x, std::vector<UserInfo> &users) {
       index = i;
     }
   }
-  return {min, users[index]};
+  return {min, {users[index].beam, index}};
 }
 
 int count_len(std::vector<Interval> &intervals) {
@@ -76,6 +99,10 @@ int count_len(std::vector<Interval> &intervals) {
     sum += interval.end - interval.start;
   }
   return sum;
+}
+
+bool intervals_intersect(const Interval &a, const Interval &b) {
+  return !(a.end < b.start || b.end < a.start);
 }
 
 std::vector<Interval>
@@ -90,65 +117,96 @@ Solver(int N, int M, int K, int J, int L,
   int max_sum = 0;
   std::vector<Interval> solution;
 
-  int len = count_len(freeRBs) / J;
+  int max_len = count_len(freeRBs);
 
-  // for (int len = max_len / J; len <= M; ++len) {
-  std::vector<std::vector<UserInfo>> filteredUsers(filteredUsersCopy);
-  int interval_idx = 0;
-  int l = freeRBs[0].start;
-  int r = freeRBs[0].end;
-  int sum = 0;
-  std::vector<Interval> local_solution;
-  std::vector<int> user_ids;
-  for (int j = 1; j <= J && l < freeRBs.back().end; ++j) {
-    if (l >= r) {
-      ++interval_idx;
-      l = freeRBs[interval_idx].start;
-      r = freeRBs[interval_idx].end;
-      for (const int user_id : user_ids) {
-        for (std::vector<UserInfo> &vec : filteredUsers) {
-          for(auto it = vec.begin(); it != vec.end(); ++it){
-            if(it->id == user_id){
-              vec.erase(it);
-              break;
+  while (J > 0) {
+    std::vector<std::vector<UserInfo>> filteredUsers(filteredUsersCopy);
+    int len = max_len / J;
+    int interval_idx = 0;
+    int l = freeRBs[0].start;
+    int r = freeRBs[0].end;
+    int sum = 0;
+    std::vector<Interval> local_solution;
+    std::vector<Interval> users_interval(N + 1,
+                                         Interval{.start = -1, .end = -1});
+    for (int j = 1; j <= J && l < freeRBs.back().end; ++j) {
+      // std::cout << "iterval " << j << std::endl;
+      if (l >= r) {
+        ++interval_idx;
+        l = freeRBs[interval_idx].start;
+        r = freeRBs[interval_idx].end;
+      }
+
+      for (int user_id = 0; user_id < users_interval.size(); ++user_id) {
+        auto user_interval = users_interval[user_id];
+        if (user_interval.start == -1) {
+          continue;
+        }
+        if (!intervals_intersect(Interval{.start = l, .end = r},
+                                 user_interval)) {
+          for (auto &vec : filteredUsers) {
+            for (auto it = vec.begin(); it != vec.end(); it++) {
+              if (it->id == user_id) {
+                // std::cout << "erased " << user_id << std::endl;
+                vec.erase(it);
+                break;
+              }
             }
           }
         }
       }
-    }
-    std::vector<std::pair<int, UserInfo &>> closest_users;
-    for (auto &users : filteredUsers) {
-      if (users.empty()) {
-        continue;
+
+      std::vector<std::pair<int, std::pair<int, int>>> closest_users;
+      for (auto &user_vec : filteredUsers) {
+        if (user_vec.empty()) {
+          continue;
+        }
+        /*std::cout << "user ids: ";
+        for (auto &user : user_vec) {
+          std::cout << user.id << " ";
+        }
+        std::cout << std::endl;*/
+        closest_users.push_back(closest(len, user_vec));
       }
-      closest_users.push_back(closest(len, users));
+
+      /*std::cout << "closest users: ";
+      for (auto &user : closest_users) {
+        std::cout << user.second.first << " ";
+      }
+      std::cout << std::endl;*/
+
+      std::vector<std::pair<int, std::pair<int, int>>> best_users =
+          kmax(L, closest_users,
+               [](std::pair<int, std::pair<int, int>> a,
+                  std::pair<int, std::pair<int, int>> b) {
+                 return a.first < b.first;
+               });
+
+      std::vector<int> users_ids;
+
+      int _len = std::min(len, r - l);
+
+      for (int i = 0; i < best_users.size(); ++i) {
+        auto &[beam, idx] = best_users[i].second;
+        auto &info = filteredUsers[beam][idx];
+        users_ids.push_back(info.id);
+        int gain = std::min({info.rbNeed, _len});
+        sum += gain;
+        info.rbNeed -= gain;
+        users_interval[info.id] = Interval{.start = l, .end = l + _len};
+      }
+
+      if (!users_ids.empty()) {
+        Interval interval{.start = l, .end = l + _len, .users = users_ids};
+        local_solution.push_back(interval);
+      }
+      l += _len;
     }
-    std::vector<std::pair<int, UserInfo &>> best_users =
-        kmax(L, closest_users,
-             [](std::pair<int, UserInfo &> a, std::pair<int, UserInfo &> b) {
-               return a.first < b.first;
-             });
-
-    std::vector<int> users_ids;
-
-    int _len = std::min(len, r - l);
-
-    for (int i = 0; i < best_users.size(); ++i) {
-      UserInfo &info = best_users[i].second;
-      users_ids.push_back(info.id);
-      int gain = std::min({info.rbNeed, _len});
-      sum += gain;
-      info.rbNeed -= gain;
-      user_ids.push_back(info.id);
+    if (sum > max_sum) {
+      max_sum = sum;
+      solution = local_solution;
     }
-
-    Interval interval{.start = l, .end = l + _len, .users = users_ids};
-    local_solution.push_back(interval);
-    l += _len;
-  }
-  if (sum > max_sum) {
-    max_sum = sum;
-    solution = local_solution;
+    J--;
   }
   //}
   // std::cout << "Sum: " << max_sum << std::endl;
@@ -171,6 +229,7 @@ int calculate_sum(std::vector<Interval> solution, std::vector<UserInfo> users) {
   return sum;
 }
 
+#ifdef MY_TEST_MODE
 int main(int argc, char **argv) {
   if (argc != 3) {
     std::cout << "usage: naive <path_to_test_file> <path_to_output_file>"
@@ -231,3 +290,4 @@ int main(int argc, char **argv) {
 
   return 0;
 }
+#endif

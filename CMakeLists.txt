@@ -1,5 +1,5 @@
 project(techarena LANGUAGES CXX)
 cmake_minimum_required(VERSION 3.10)
 set(CMAKE_CXX_STANDARD 17)
+add_compile_definitions(MY_TEST_MODE)
 add_executable(naive naive.cpp)
-
