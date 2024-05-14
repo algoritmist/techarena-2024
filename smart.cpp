@@ -35,7 +35,7 @@ std::vector<Interval> getFReeRbs(int M,
   return its;
 }
 
-void removeEmpty(std::vector<std::vector<UserInfo>> &infos) {
+void removeEmptyAndSort(std::vector<std::vector<UserInfo>> &infos) {
   for (int i = 0; i < infos.size(); ++i) {
     if (infos[i].empty()) {
       while (!infos.empty() && infos.back().empty()) {
@@ -46,6 +46,10 @@ void removeEmpty(std::vector<std::vector<UserInfo>> &infos) {
       }
     }
   }
+  sort(infos.begin(), infos.end(),
+       [](std::vector<UserInfo> &a, std::vector<UserInfo> &b) {
+         return a.back().rbNeed > b.back().rbNeed;
+       });
 }
 
 template <class T, class Compare>
@@ -88,11 +92,7 @@ filterUsers(int J, const std::vector<UserInfo> &userInfos) {
     }
     reverse(infos[i].begin(), infos[i].end());
   }
-  removeEmpty(infos);
-  sort(infos.begin(), infos.end(),
-       [](std::vector<UserInfo> &a, std::vector<UserInfo> &b) {
-         return a.back().rbNeed > b.back().rbNeed;
-       });
+  removeEmptyAndSort(infos);
   return infos;
 }
 
@@ -112,7 +112,7 @@ void update_user_vec(std::vector<UserInfo> &infos) {
   if (infos.empty()) {
     return;
   }
-  if (infos.back().rbNeed == 0) {
+  if (infos.back().rbNeed <= 0) {
     infos.pop_back();
   } else {
     int sz = infos.size();
@@ -131,7 +131,7 @@ int mod(int x, int y) {
   return x;
 }
 
-int update_pos(const std::vector<std::vector<UserInfo>> &infos,
+/*int update_pos(const std::vector<std::vector<UserInfo>> &infos,
                int users_in_interval, int pos) {
   int sz = infos.size();
   int sum_cur = 0;
@@ -146,7 +146,7 @@ int update_pos(const std::vector<std::vector<UserInfo>> &infos,
     sum_next += infos[idx].back().rbNeed;
   }
   return (sum_cur > sum_next) ? pos : new_pos;
-}
+}*/
 
 std::vector<Interval>
 Solver(int N, int M, int K, int J, int L,
@@ -160,7 +160,8 @@ Solver(int N, int M, int K, int J, int L,
 
   int max_len = count_len(freeRBs);
 
-  std::vector<std::vector<UserInfo>> filteredUsersCopy = filterUsers(J, userInfos);
+  std::vector<std::vector<UserInfo>> filteredUsersCopy =
+      filterUsers(J, userInfos);
 
   for (int len = 1; len <= max_len; ++len) {
     std::vector<std::vector<UserInfo>> filteredUsers(filteredUsersCopy);
@@ -171,7 +172,7 @@ Solver(int N, int M, int K, int J, int L,
     std::vector<Interval> local_solution;
     std::vector<Interval> user_interval(N + 1,
                                         Interval{.start = -1, .end = -1});
-    int pos = 0;
+    // int pos = 0;
     for (int j = 1; j <= J && l < freeRBs.back().end; ++j) {
       // std::cout << "iterval " << j << std::endl;
       if (l >= r) {
@@ -192,7 +193,7 @@ Solver(int N, int M, int K, int J, int L,
         }
       }
 
-      removeEmpty(filteredUsers);
+      removeEmptyAndSort(filteredUsers);
 
       int sz = filteredUsers.size();
 
@@ -200,24 +201,23 @@ Solver(int N, int M, int K, int J, int L,
         break;
       }
 
-      pos = mod(pos, sz);
+      // pos = mod(pos, sz);
 
       int users_in_interval = std::min(sz, L);
-      pos = update_pos(filteredUsers, users_in_interval, pos);
+      // pos = update_pos(filteredUsers, users_in_interval, pos);
 
       std::vector<int> user_ids;
 
       int _len = std::min(len, r - l);
       int max_gain = 0;
 
-      for (int cnt = 0, i = pos; cnt < users_in_interval; ++cnt, ++i) {
-        int idx = mod(i, sz);
-        auto &user = filteredUsers[idx].back();
+      for (int i = 0; i < users_in_interval; ++i) {
+        auto &user = filteredUsers[i].back();
         int gain = std::min(_len, user.rbNeed);
         max_gain = std::max(max_gain, gain);
         sum += gain;
         user.rbNeed -= gain;
-        update_user_vec(filteredUsers[idx]);
+        update_user_vec(filteredUsers[i]);
         user_ids.push_back(user.id);
       }
 
