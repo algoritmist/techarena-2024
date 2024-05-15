@@ -36,7 +36,7 @@ std::vector<Interval> getFReeRbs(int M,
 }
 
 void removeEmpty(std::vector<std::vector<UserInfo>> &infos) {
-  for (int i = 0; i < infos.size(); ++i) {
+  /*for (int i = 0; i < infos.size(); ++i) {
     if (infos[i].empty()) {
       while (!infos.empty() && infos.back().empty()) {
         infos.pop_back();
@@ -44,6 +44,19 @@ void removeEmpty(std::vector<std::vector<UserInfo>> &infos) {
       if (i < infos.size()) {
         swap(infos[i], infos.back());
       }
+    }
+    while (!infos.empty() && infos.back().empty()) {
+      infos.pop_back();
+    }
+    for (auto &vec : infos) {
+      assert(!vec.empty());
+    }
+  }*/
+  for (auto it = infos.begin(); it != infos.end();) {
+    if (it->empty()) {
+      it = infos.erase(it);
+    } else {
+      ++it;
     }
   }
 }
@@ -96,10 +109,12 @@ filterUsers(int J, const std::vector<UserInfo> &userInfos) {
   return infos;
 }
 
+int interval_length(const Interval &a) { return a.end - a.start; }
+
 int count_len(std::vector<Interval> &intervals) {
   int sum = 0;
   for (const Interval &interval : intervals) {
-    sum += interval.end - interval.start;
+    sum += interval_length(interval);
   }
   return sum;
 }
@@ -148,34 +163,71 @@ int update_pos(const std::vector<std::vector<UserInfo>> &infos,
   return (sum_cur > sum_next) ? pos : new_pos;
 }
 
+std::vector<Interval> splitRBs(std::vector<Interval> blocks, int len){
+  int sz = blocks.size();
+  for(int i = 0; i < sz; ++i){
+    int blk_len = interval_length(blocks[i]);
+    int r = blocks[i].end;
+    int rem = blk_len % len;
+    if(rem > 0){
+      blocks[i].end -= rem;
+      blocks.push_back(Interval{.start = r - rem, .end = r});
+    }
+  }
+  return blocks;
+}
+
 std::vector<Interval>
 Solver(int N, int M, int K, int J, int L,
        std::vector<Interval> reservedRBs, // vector users is empty
        std::vector<UserInfo> userInfos) {
 
-  std::vector<Interval> freeRBs = getFReeRbs(M, reservedRBs);
+  std::vector<Interval> freeRBsCopy = getFReeRbs(M, reservedRBs);
 
   int max_sum = 0;
   std::vector<Interval> solution;
 
-  int max_len = count_len(freeRBs);
+  int max_len = count_len(freeRBsCopy);
 
-  std::vector<std::vector<UserInfo>> filteredUsersCopy = filterUsers(J, userInfos);
+  std::vector<std::vector<UserInfo>> filteredUsersCopy =
+      filterUsers(J, userInfos);
 
   for (int len = 1; len <= max_len; ++len) {
+    auto freeRBs = splitRBs(freeRBsCopy, len);
+    sort(freeRBs.begin(), freeRBs.end(), [](Interval &a, Interval &b) {
+      return interval_length(a) > interval_length(b);
+    });
     std::vector<std::vector<UserInfo>> filteredUsers(filteredUsersCopy);
+    /*sort(filteredUsers.begin(), filteredUsers.end(),
+         [&len](std::vector<UserInfo> &a, std::vector<UserInfo> &b) {
+           assert(!a.empty() && !b.empty());
+           int da = a.back().rbNeed - len;
+           int db = b.back().rbNeed - len;
+           if (da * db > 0) {
+             return std::abs(da) < std::abs(db);
+           }
+           if (da < 0) {
+             return false;
+           }
+           return true;
+         });*/
     int interval_idx = 0;
-    int l = freeRBs[0].start;
-    int r = freeRBs[0].end;
+    int rounds = 0;
+    int l = freeRBs[interval_idx].start;
+    int r = freeRBs[interval_idx].end;
     int sum = 0;
     std::vector<Interval> local_solution;
     std::vector<Interval> user_interval(N + 1,
                                         Interval{.start = -1, .end = -1});
     int pos = 0;
-    for (int j = 1; j <= J && l < freeRBs.back().end; ++j) {
+    for (int j = 1; j <= J; ++j) {
       // std::cout << "iterval " << j << std::endl;
       if (l >= r) {
+        if (++rounds == freeRBs.size()) {
+          break;
+        }
         ++interval_idx;
+        interval_idx %= freeRBs.size();
         l = freeRBs[interval_idx].start;
         r = freeRBs[interval_idx].end;
       }
@@ -222,7 +274,7 @@ Solver(int N, int M, int K, int J, int L,
       }
 
       int new_l = l + std::min(_len, max_gain);
-      if(max_gain == 0){
+      if (max_gain == 0) {
         break;
       }
 
@@ -292,6 +344,7 @@ int main(int argc, char **argv) {
     return -2;
   }
 
+  int total_points = 0;
   int tests;
   test_file >> tests;
   for (int t = 1; t <= tests; ++t) {
@@ -311,6 +364,7 @@ int main(int argc, char **argv) {
     }
     std::vector<Interval> solution = Solver(N, M, K, J, L, reservedRbs, users);
     int sum = calculate_sum(solution, users);
+    total_points += sum;
     output_file << "Test: " << t << std::endl;
     output_file << "Sum: " << sum << std::endl;
     for (const Interval &interval : solution) {
@@ -323,7 +377,7 @@ int main(int argc, char **argv) {
       output_file << std::endl;
     }
   }
-
+  std::cout << "Scored " << total_points << " points" << std::endl;
   return 0;
 }
 #endif
