@@ -49,31 +49,6 @@ void removeEmptyAndSort(std::vector<std::vector<UserInfo>> &infos) {
        });
 }
 
-template <class T, class Compare>
-std::vector<T> kmax(int k, std::vector<T> arr, Compare cmp) {
-  if (k < 10) {
-    std::vector<T> sorted;
-    for (auto &element : arr) {
-      if (sorted.size() < k) {
-        sorted.push_back(element);
-      } else {
-        auto it = std::min_element(sorted.begin(), sorted.end(), cmp);
-        if (cmp(*it, element)) {
-          sorted.erase(it);
-          sorted.push_back(element);
-        }
-      }
-    }
-    return sorted;
-  } else {
-    std::sort(arr.rbegin(), arr.rend(), cmp);
-    while (arr.size() > k) {
-      arr.pop_back();
-    }
-    return arr;
-  }
-}
-
 std::vector<std::vector<UserInfo>>
 filterUsers(int J, const std::vector<UserInfo> &userInfos) {
   std::vector<std::vector<UserInfo>> infos =
@@ -137,23 +112,6 @@ int mod(int x, int y) {
   }
   return x;
 }
-
-/*int update_pos(const std::vector<std::vector<UserInfo>> &infos,
-               int users_in_interval, int pos) {
-  int sz = infos.size();
-  int sum_cur = 0;
-  for (int i = pos, cnt = 0; cnt < users_in_interval; ++cnt, ++i) {
-    int idx = mod(i, sz);
-    sum_cur += infos[idx].back().rbNeed;
-  }
-  int new_pos = mod(pos + users_in_interval, sz);
-  int sum_next = 0;
-  for (int i = new_pos, cnt = 0; cnt < users_in_interval; ++cnt, ++i) {
-    int idx = mod(i, sz);
-    sum_next += infos[idx].back().rbNeed;
-  }
-  return (sum_cur > sum_next) ? pos : new_pos;
-}*/
 
 std::vector<Interval> splitRBs(std::vector<Interval> blocks, int len) {
   int sz = blocks.size();
