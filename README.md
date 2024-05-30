@@ -1,5 +1,5 @@
 # MSU TECHARENA-2024
-My solution for techarena-2024. Scored ```1899670``` on open-closed testsets.
+My solution for techarena-2024. Scored ```1899670``` on final testsets.
 # Build
 CMake generates two solutions I tried to solve the competition, wich are ```naive.cpp``` and ```smart.cpp```.
 ## Example of usage
